@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<form action="{{url_for('notice')}}" method="POST">
+  <input type="text" name="title" />
+  <textarea type="text" name="content"></textarea>
+  <input type="datetime-local" name="start_datetime" />
+  <input type="datetime-local" name="end_datetime" />
+  <input type="submit" value="POST" />
+</form>
+
+<table class="table table-dark">
+  <thead>
+    <tr>
+      <th>title</th>
+      <th>content</th>
+      <th>start</th>
+      <th>end</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for notice in notices %}
+    <tr>
+      <td>
+        {{ notice.title }}
+      </td>
+      <td>
+        {{ notice.content }}
+      </td>
+      <td>
+        {{ notice.start_datetime }}
+      </td>
+      <td>
+        {{ notice.end_datetime }}
+      </td>
+      <td>
+        <form action="{{url_for('notice_delete',id=notice.id)}}" method="POST">
+          <input type="submit" value="Delete" />
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+
+{% endblock %}
+
+{% block script %}
+<script>
+  console.log("this is login.html")
+</script>
+{% endblock %}

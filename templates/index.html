@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block css%}
+<link rel="stylesheet" href="{{url_for('static',filename='css/origins/index.css')}}" />
+{% endblock%}
+
+{% block content %}
+<div id="view" style="height:100%; width:100%;"></div>
+{% endblock %}
+
+{% block script %}
+<script src="{{url_for('static',filename='js/utils/modal.js')}}"></script>
+<script src="{{url_for('static',filename='js/origins/notice_load.js')}}"></script>
+<script src="{{url_for('static',filename='js/origins/script_load.js')}}"></script>
+<script type="module" src="{{url_for('static',filename='js/origins/scene_load.js')}}"></script>
+
+
+<script>
+  console.warn("this is index.html");
+</script>
+{% endblock %}

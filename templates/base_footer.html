@@ -1,0 +1,16 @@
+<div class="row h-100">
+  <div class="col h-100">
+    <div class="bg-dark text-light d-flex justify-content-center align-items-center h-100">
+      {% if current_user.is_authenticated %}
+      <div class="view-controller">
+        <i class="bi bi-controller"></i>
+        <i class="bi bi-arrow-up"></i>
+        <i class="bi bi-arrow-down"></i>
+        <i class="bi bi-arrow-left"></i>
+        <i class="bi bi-arrow-right"></i>
+      </div>
+      {% else %}
+      {% endif %}
+    </div>
+  </div>
+</div>
