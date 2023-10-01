@@ -1,5 +1,7 @@
-let socket = io();//.connect('https://' + document.domain + ':' + location.port + "/");
 
+//ammo.jsでio()が上書きされてしまうので，ammo.jsの前に実行しなければならない。
+let socket = io();
+//.connect('https://' + document.domain + ':' + location.port + "/");
 socket.on("connect", function () {
   socket.emit("server_echo", { msg: "client connected!" });
 });

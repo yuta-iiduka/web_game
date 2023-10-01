@@ -42,5 +42,5 @@ notice_modal
   .setHeader("<h2>お知らせ</h2>")
   .setBody()
   .setTrigger("notice")
-let nl = new NoticeLoad("/notice/load");
-nl.load();
+let notice_load = new NoticeLoad("/notice/load");
+notice_load.load();
