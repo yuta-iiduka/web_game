@@ -1,8 +1,14 @@
-// three.js r69 r157 依存
+// three.js r157 依存
 import * as THREE from "../libs/three/build/three.module.js";
+// カメラ移動関連
 import { OrbitControls } from "../libs/three/jsm/controls/OrbitControls.js";
+import { FirstPersonControls } from "../libs/three/jsm/controls/FirstPersonControls.js";
 //OrbitControls.js内のimport先を'../../build/three.module.js'へ変更
-//ライブラリのバージョン管理必要じゃん TODO:r69 libsに置換
+
+//
+import { HDRCubeTextureLoader } from "../libs/three/jsm/loaders/HDRCubeTextureLoader.js";
+// import { FlakesTexture } from "../libs/three/jsm/textures/FlakesTexture.js";
+
 
 // stats.js依存 https://github.com/mrdoob/stats.js
 //debug
@@ -13,13 +19,15 @@ import dat from "../libs/three/dat/dat.gui.module.js";
 // Physijs.scripts.worker = "static/js/libs/three/physijs/physijs_worker.js";
 // Physijs.scripts.ammo = "ammo.js";
 
-class WEB3D {
+export class WEB3D {
   static list = [];
   static cnt = 0;
-  static renderer = new THREE.WebGLRenderer({ antialias: true });
+  static renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   static active_w3 = null;
+  static active_object = null;
   static b_param_gui = false;
   static b_stats = false;
+  // static audio_context = new AudioContext();
 
   //スタティックイニシャライザ
   static {
@@ -34,10 +42,30 @@ class WEB3D {
     this.gui = new dat.GUI();
     this.stats = new Stats();
     this.view.appendChild(this.stats.domElement); //append(this.stats.domElement);
+    //2d text
+    this.text_canvas = document.createElement("canvas");
+    this.text_canvas.id = "text_canvas";
+    this.text_canvas.style.position = "fixed";
+    this.text_canvas.style.top = "0";
+    this.text_canvas.style.zIndex = "10000";
+    this.text_canvas.style.display = "none";
+    this.view.appendChild(this.text_canvas);
+    this.set_canvas_text("test");
+    //menu text
+    this.menu_canvas = document.createElement("canvas");
+    this.menu_canvas.id = "menu_canvas";
+    this.menu_canvas.style.display = "none";
+    this.view.appendChild(this.menu_canvas);
+
+    //object mouse select event
+    this.raycaster = new THREE.Raycaster();
+    this.pointer = new THREE.Vector2();
+
     console.warn("web3d static initializer is called.")
   }
 
   constructor(name) {
+    let self = this;
     this.id = WEB3D.cnt;
     this.active = false;
     if (name === undefined) {
@@ -45,25 +73,36 @@ class WEB3D {
     } else {
       this.name = "";
     }
-
+    this.clock = new THREE.Clock();
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(45, WEB3D.w / WEB3D.h, 0.1, 1000);
+    this.camera.lookAt(this.scene.position);
     this.axes = new THREE.AxesHelper(20); //three new
     // this.axes = new THREE.AxisHelper(20); //three old
+    this.audio_loaders = [];
+    this.audio_listener = new THREE.AudioListener();
+
+    //r157時点で一人称カメラになるとエラーとなってしまうのでAudioListenerをオーバーライドして，エラーを回避
+    //Audioクラスも多分エラーになる
+    this.camera.add(this.audio_listener);
 
     this.scene.add(this.axes);
 
     this.set_stats(WEB3D.b_stats);
     this.set_param_gui(WEB3D.b_param_gui);
+    this.set_mouse_collider(function () { console.warn(WEB3D.active_object); });
 
     WEB3D.list.push(this);
     WEB3D.cnt++;
 
-    console.warn("constructor is called.")
+    console.warn("constructor is called.");
 
   }
 
+  // TODO: text videoの描写関数
+
   init() {
+    // this.set_camera(-1, 1, 0);
     this.set_camera(-30, 40, 30);
     this.set_plane();
     this.set_cube();
@@ -81,7 +120,15 @@ class WEB3D {
     if (this.active === true) {
       if (WEB3D.stats !== null) { WEB3D.stats.update(); }
       requestAnimationFrame(function () { self.draw() });
+      // object update
       this.update();
+      // mouse collider update
+      this.update_mouse_collider();
+      // controls update
+      if (this.controls.update !== undefined) {
+        this.controls.update(this.clock.getDelta());
+      }
+      // rendering
       WEB3D.renderer.render(this.scene, this.camera);
     }
     return this;
@@ -93,7 +140,7 @@ class WEB3D {
     this.camera.aspect = this.w / this.h;
     this.camera.updateProjectionMatrix();
     WEB3D.renderer.setSize(this.w, this.h);
-    // this.draw();
+    if (this.controls !== undefined && this.controls.handleResize !== undefined) { this.controls.handleResize(); }
     return this;
   }
 
@@ -101,28 +148,116 @@ class WEB3D {
     this.camera.position.x = x;
     this.camera.position.y = y;
     this.camera.position.z = z;
-    this.camera.lookAt(this.scene.position);
 
     return this;
   }
 
-  set_plane() {
-    let planeGeometry = new THREE.PlaneGeometry(60, 20);
+  //set_audio_loaderでthree_objを登録し，three_obj.sound()を定義する
+  set_audio_loader(three_obj, sound_path) {
+    let audio_loader = new THREE.AudioLoader();
+    audio_loader.sound_path = sound_path;
+    audio_loader.sound_id = this.audio_loaders.length;
+
+    //audio要素を追加
+    // const audio_dom_id = "audio" + audio_loader.sound_id;
+    // let audio_dom = document.createElement(audio_dom_id);
+    // audio_dom.style.display = "none";
+    // audio_dom.id = audio_dom_id;
+    // let source_dom = document.createElement("source");
+    // source_dom.src = audio_loader.sound_path;
+    // source_dom.type = "audio/mpeg";
+    // //audio要素内にsourceを追加
+    // audio_dom.appendChild(source_dom);
+    // //audio要素をviewに追加
+    // WEB3D.view.appendChild(audio_dom);
+    // audio_loader.sound_dom = audio_dom;
+
+    let self = this;
+    audio_loader.load(sound_path, function (buffer) {
+      const audio = new THREE.PositionalAudio(self.audio_listener);
+      // audio.setMediaElementSource(audio_dom);
+      // audio.setRefDistance(10);
+      audio.setBuffer(buffer);
+      audio.setLoop(true);
+      three_obj.add(audio);
+    });
+    this.audio_loaders.push(audio_loader);
+    return this;
+  }
+
+  //シーンの背景を設定する
+  /** 
+    HDRファイルを背景に設定します。
+    https://anyconv.com/ja/jpeg-to-hdr-konbata/#google_vignette
+  */
+  set_background(folder_path, hdr_file_name_list) {
+    const self = this;
+    new HDRCubeTextureLoader()
+      .setPath(folder_path)
+      .load(
+        hdr_file_name_list,
+        function (texture) {
+          self.scene.background = texture;
+          self.scene.environment = texture;
+        }
+      );
+    return this;
+  }
+
+  set_menu() {
+    let self = this;
+    let menuGeometry = new THREE.PlaneGeometry(WEB3D.view.innerWidth, WEB3D.view.innerHeight);
+    let menuMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, name: "menu", opacity: 0.5, transparent: true, alphaToCoverage: true })
+    let menu = new THREE.Mesh(menuGeometry, menuMaterial);
+    WEB3D.set_canvas_menu("canvas menu");
+    menuMaterial.map = new THREE.Texture(WEB3D.menu_canvas);
+    menu.name = "menu";
+    menu.update = function () {
+      menu.material.map.needsUpdate = true;
+      menu.rotation.x += 1;//Math.PI * 1.5;
+      menu.position.x = self.camera.position.x - 1;
+      menu.position.y = self.camera.position.y;
+      menu.position.z = self.camera.position.z - 1;
+    }
+    let display = true;
+    WEB3D.view.addEventListener("contextmenu", function () {
+      if (display === true) {
+        display = false;
+      } else {
+        display = true;
+      }
+      if (display === true) {
+
+      }
+    })
+
+    this.scene.add(menu);
+  }
+
+  set_plane(px = 15, py = 0, pz = 0, rx = 0, ry = 0, rz = 0, w = 60, h = 20, color = 0xffffff) {
+    let planeGeometry = new THREE.PlaneGeometry(w, h);
     // let planeMaterial = new THREE.MeshBasicMaterial({ color: 0xcccccc });
-    let planeMaterial = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+    // let planeMaterial = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+    // let planeMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff, opacity: 1.0, transparent: true, alphaToCoverage: true });
+    let planeMaterial = new THREE.MeshBasicMaterial({ color: color, opacity: 1.0, transparent: true, alphaToCoverage: true });
+
     let plane = new THREE.Mesh(planeGeometry, planeMaterial);
     plane.receiveShadow = true;
 
     plane.name = "plane";
 
-    plane.rotation.x = -0.5 * Math.PI;
-    plane.position.x = 15;
-    plane.position.y = 0;
-    plane.position.z = 0;
+    // plane.rotation.x = -0.5 * Math.PI;
+    plane.rotation.x = rx * Math.PI;
+    plane.rotation.y = ry * Math.PI;
+    plane.rotation.z = rz * Math.PI;
+
+    plane.position.x = px;
+    plane.position.y = py;
+    plane.position.z = pz;
 
     this.scene.add(plane);
 
-    return this;
+    return plane;
   }
 
   set_cube() {
@@ -136,17 +271,41 @@ class WEB3D {
 
     cube.position.x = -4;
     cube.position.y = 3;
-    cube.position.z = 0;
+    cube.position.z = 10;
 
     cube.update = function () {
       cube.rotation.x += 0.02;
       cube.rotation.y += 0.02;
       cube.rotation.z += 0.02;
+
+      cube.position.z -= 0.1;
+      if (cube.position.z < -10) {
+        cube.position.z = 10;
+      }
     }
+
+    cube.sound_play = false;
+
+    // this.set_audio_loader(cube, "static/sound/sample_bgm.mp3")
+    cube.sound = function () {
+      if (cube.position.z < 0.1 && cube.position.z >= 0.0) {
+        if (cube.sound_play === false) {
+          console.warn("cube sound start");
+          cube.children[0].play();
+        }
+        cube.sound_play = true;
+      }
+    }
+
+    // cube.texts = [
+    //   "sample_bgm.mp3を流してます。",
+    //   "気に入りましたか？",
+    //   "歩き回ってみましょう。",
+    // ]
 
     this.scene.add(cube);
 
-    return this;
+    return cube;
   }
 
   set_sphere() {
@@ -178,8 +337,15 @@ class WEB3D {
 
   set_mouse_controls() {
     //マウス操作を有効化
-    this.controls = new OrbitControls(this.camera, WEB3D.renderer.domElement);
-
+    // this.controls = new OrbitControls(this.camera, WEB3D.renderer.domElement);
+    this.controls = new FirstPersonControls(this.camera, WEB3D.renderer.domElement);
+    this.controls.movementSpeed = 20;
+    this.controls.lookSpeed = 0.05;
+    this.controls.noFly = true;
+    this.controls.lookVertical = true;
+    this.controls.constrainVertical = true;
+    this.controls.lon = -150;
+    this.controls.lat = 120;
     return this;
   }
 
@@ -220,6 +386,20 @@ class WEB3D {
         if (obj_list[i].update !== undefined && obj_list[i] !== null) {
           obj_list[i].update();
         }
+        if (obj_list[i].sound !== undefined && obj_list[i] !== null) {
+          // WEB3D.audio_context.resume().then(() => {
+          //   try {
+          //     obj_list[i].sound();
+          //   } catch {
+          //     console.warn(`${obj_list[i].name} is not ready.`);
+          //   }
+          // })
+          try {
+            obj_list[i].sound();
+          } catch {
+            console.warn(`${obj_list[i].name} is not ready.`);
+          }
+        }
         if (obj_list[i].load !== undefined && obj_list[i] !== null) {
           obj_list[i].load();
         }
@@ -231,6 +411,8 @@ class WEB3D {
       //     obj.rotation.x += 0.01;
       //   }
       // }) 
+
+
     }
   }
 
@@ -244,10 +426,45 @@ class WEB3D {
     return three_obj;
   }
 
-  // set_mouse_collider(three_obj) {
-  //   three_obj.mouse_collider = true;
-  //   return three_obj;
-  // }
+  set_mouse_collider(func1, func2) {
+    WEB3D.view.addEventListener("pointermove", function (e) {
+      WEB3D.pointer.x = e.offsetX / WEB3D.view.clientWidth * 2 - 1;
+      WEB3D.pointer.y = -e.offsetY / WEB3D.view.clientHeight * 2 + 1;
+      // console.warn(WEB3D.pointer.x, WEB3D.pointer.y);
+      //選択解除
+      if (window.getSelection) {
+        window.getSelection().removeAllRanges();
+      }
+    });
+
+    WEB3D.view.addEventListener("mouseup", function (e) {
+      //e.button 1:左, 2:中央, 3:右
+      //e.key
+      if (e.button == 0 && func1 !== undefined) {
+        func1(e);
+      } else if (e.button == 2 && func2 !== undefined) {
+        func2(e);
+      }
+    });
+
+    return this;
+  }
+
+  update_mouse_collider() {
+    // mouse collider
+    WEB3D.raycaster.setFromCamera(WEB3D.pointer, this.camera);
+    const intersects = WEB3D.raycaster.intersectObjects(this.scene.children);
+    if (intersects.length === 0) {
+      WEB3D.active_object = null;
+    } else {
+      for (let i = 0; i < intersects.length; i++) {
+        // マウスカーソルが当たるとマテリアルが赤になる
+        // intersects[i].object.material.color.set(0xff0000);
+        WEB3D.active_object = intersects[i].object;
+        break;
+      }
+    }
+  }
 
   // set_collider(three_obj) {
   //   three_obj.collider = true;
@@ -257,6 +474,37 @@ class WEB3D {
   // set_controller(three_obj) {
   //   return three_obj;
   // }
+
+  reset() {
+    //通常のTHREEオブジェクトを全て破棄
+    const object_count = this.scene.children.length;
+    for (let i = 1; i <= object_count; i++) {
+      this.scene.remove(this.scene.children[object_count - i])
+    }
+    console.warn(this.scene.children);
+  }
+
+  async pick_imgs() {
+    const img_list = await window.showOpenFilePicker();
+    let fd = new FormData();
+    for (let i = 0; i < img_list.length; i++) {
+      const img = await img_list[i].getFile();
+      fd.append("img" + i, img);
+      console.log(img_list[i], img);
+    }
+    // let fd = new FormData();//($("#my_form").get(0));
+    //console.log($("#my_form")[0].files[0]);
+    //$("#my_form")[0].files[0] = img_file;
+    // fd.append("img", img_file);
+    // this.xhr.open("POST","imgs/"+this.user_id); //<-【TODO】ここはURLに依存するため動的に変更できるようにしておくべき
+    //this.xhr.setRequestHeader("Content-Type","multipart/form-data;image/png");
+    //this.xhr.setRequestHeader("Content-Type","application/x-www-form-urlencoded");
+    // this.xhr.send(fd);
+    //let imgNode = document.createElement("img");
+    //	imgNode.setAttribute("src","");
+    //range.deleteContents();
+    //range.insertNode(imgNode);
+  }
 
   static activate(w3) {
     w3.active = true;
@@ -300,13 +548,26 @@ class WEB3D {
     return null;
   }
 
+  static set_canvas_text(text = "", x = 10, y = 48) {
+    let ctx = WEB3D.text_canvas.getContext("2d");
+    ctx.font = "48px serif";
+    // ctx.fillStyle = "#ffffff";
+    ctx.fillText(text, x, y);
+  }
+
+  static set_canvas_menu(text = "", x = 10, y = 48) {
+    let ctx = WEB3D.menu_canvas.getContext("2d");
+    ctx.font = "48px seif";
+    ctx.fillStyle = "#ff0000";
+    ctx.fillText(text, x, y);
+  }
+
 }
 
 // Phyji.js物理エンジン
 // class WEB3DPhysijs extends WEB3D {
 //   constructor(name) {
 //     super(name);
-//     //文法の違い？
 //     this.scene = new Physijs.Scene();
 //     this.scene.setGravity(new THREE.Vector3(0, -10, 0));
 //     this.set_stone();
@@ -333,13 +594,12 @@ import { ConvexObjectBreaker } from '../libs/three/jsm/misc/ConvexObjectBreaker.
 import { ConvexGeometry } from '../libs/three/jsm/geometries/ConvexGeometry.js';
 // import { Ammo } from '../libs/three/jsm/libs/ammo.wasm.js';
 
-class WEB3DAmmo extends WEB3D {
+export class WEB3DAmmo extends WEB3D {
   static {
     console.warn("web3d_ammo static initializer is called.");
   }
   constructor(name) {
     super(name)
-    this.clock = new THREE.Clock();
     this.texture_loader;
     this.mouseCoords = new THREE.Vector2();
     this.raycaster = new THREE.Raycaster();
@@ -380,17 +640,57 @@ class WEB3DAmmo extends WEB3D {
     }
   }
 
+  reset() {
+    super.reset();
+    if (typeof (Ammo) !== "function") {
+      // const remove_object_count = this.objects_to_remove.length;
+      // for (let i = 1; i < remove_object_count; i++) {
+      //   this.remove_debris(this.objects_to_remove[remove_object_count - i]);
+      // }
+      Ammo.destroy(this.physics_world);
+      console.warn("destroy physic_world");
+      Ammo.destroy(this.solver);
+      console.warn("destroy solver");
+      Ammo.destroy(this.collision_configuration);
+      console.warn("destroy collision_configuration");
+      Ammo.destroy(this.dispatcher);
+      console.warn("destroy dispatcher");
+      Ammo.destroy(this.broadphase);
+      console.warn("destroy");
+    }
+  }
+
   init() {
     let self = this;
-    Ammo().then(function (AmmoLib) {
-      Ammo = AmmoLib;
-      self.init_graphics();
-      self.init_physics();
-      self.create_objects();
-      self.init_input();
-      // self.set_cube();
-      self.draw();
-    });
+    if (typeof (Ammo) === "function") {
+      Ammo().then(function (AmmoLib) {
+        Ammo = AmmoLib;
+        console.warn("Ammo jx is loaded : ", Ammo);
+        // self.init_graphics();
+        // self.init_physics();
+        // self.create_objects();
+        // self.init_input();
+        // self.draw();
+        self.init_objects();
+      });
+    } else {
+      this.init_objects();
+    }
+  }
+
+  init_objects() {
+    this.init_graphics();
+    this.init_physics();
+    this.create_objects();
+    this.init_input();
+    this.set_menu();
+    this.draw();
+  }
+
+  set_mouse_controls() {
+    //マウス操作を有効化
+    this.controls = new OrbitControls(this.camera, WEB3D.renderer.domElement);
+    return this;
   }
 
   init_graphics() {
@@ -404,8 +704,10 @@ class WEB3DAmmo extends WEB3D {
     WEB3DAmmo.renderer.shadowMap.enabled = true;
     //controls
     this.set_mouse_controls();
-    this.controls.target.set(0, 2, 0);
-    this.controls.update();
+    if (this.controls.target !== undefined) {
+      this.controls.target.set(0, 2, 0);
+    }
+    this.controls.update(this.clock.getDelta());
     //texture
     this.texture_loader = new THREE.TextureLoader();
 
@@ -459,16 +761,18 @@ class WEB3DAmmo extends WEB3D {
   create_objects() {
     this.pos.set(0, -0.5, 0);
     this.quat.set(0, 0, 0, 1);
-    const ground = this.create_paralellepipe_with_physics(40, 1, 40, 0, this.pos, this.quat, new THREE.MeshPhongMaterial({ color: 0xFFFFFF }));
+    const ground = this.create_paralellepipe_with_physics(40, 5, 40, 0, this.pos, this.quat, new THREE.MeshPhongMaterial({ color: 0xFFFFFF }));
     ground.receiveShadow = true;
-    this.texture_loader.load('static/img/textures/grid.png', function (texture) {
-      texture.wrapS = THREE.RepeatWrapping;
-      texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(40, 40);
-      ground.material.map = texture;
-      ground.material.needsUpdate = true;
-    });
-
+    this.texture_loader.load(
+      'static/img/textures/grid.png',
+      function (texture) {
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(40, 40);
+        ground.material.map = texture;
+        ground.material.needsUpdate = true;
+      });
+    ground.name = "ground";
 
     // Tower 1
     const towerMass = 1000;
@@ -477,6 +781,10 @@ class WEB3DAmmo extends WEB3D {
     this.quat.set(0, 0, 0, 1);
     const tower_1 = this.create_object(towerMass, towerHalfExtents, this.pos, this.quat, this.create_material(0xB03014));
     tower_1.name = "tower_1";
+    tower_1.texts = [
+      "タワー１です。",
+      "ボールの衝突で壊れます。",
+    ]
     console.warn("tower 1", tower_1);
 
     // Tower 2
@@ -533,6 +841,17 @@ class WEB3DAmmo extends WEB3D {
     this.create_rigid_body(object, shape, mass, pos, quat);
 
     return object;
+  }
+
+  create_sphere_object(r, w, h, mass, pos, quat, material) {
+    const sp_obj = new THREE.Mesh(new THREE.SphereGeometry(r, w, h), material)
+    const sp_shp = new Ammo.btSphereShape(r);
+    sp_shp.setMargin(this.margin);
+    const sp_body = this.create_rigid_body(sp_obj, sp_shp, mass, pos, quat);
+
+    // pos.multiplyScalar(24);
+    // sp_body.setLinearVelocity(new Ammo.btVector3(pos.x, pos.y, pos.z));
+    return sp_obj;
   }
 
   create_debris_from_breakable_object(object) {
@@ -765,29 +1084,42 @@ class WEB3DAmmo extends WEB3D {
     this.num_objects_to_remove = 0;
   }
 
-  //Ammoシーンの取り消し（リセット方法）
+  //TODO:Ammoシーンの取り消し（リセット方法）
 
 }
 
-let w3_1 = new WEB3D("scene1");
-let w3_2 = new WEB3DAmmo("scene2");
+// let w3_1 = new WEB3D("scene1");
+// let w3_2 = new WEB3DAmmo("scene2");
 
-window.onload = function () {
-  WEB3D.activate(w3_1);
-}
+// window.onload = function () {
+//   let start = false;
+//   document.getElementById("view").addEventListener("click", function () {
+//     if (start === false) {
+//       WEB3D.activate(w3_1);
+//       WEB3D.active_w3.resize();
+//       start = true;
+//     }
+//   });
+// }
 
-window.addEventListener("resize", function () {
-  WEB3D.active_w3.resize();
-})
+// window.addEventListener("resize", function () {
+//   if (WEB3D.active_w3 !== null) {
+//     WEB3D.active_w3.resize();
+//   }
+// })
 
-window.addEventListener("keypress", function (e) {
-  if (e.key === "1") {
-    WEB3D.activate(w3_1);
-    // w3_2.scene.fog = new THREE.FogExp2(0xff1234, 0.015);
-  } else if (e.key === "2") {
-    WEB3D.activate(w3_2);
-  } else if (e.key === "d") {
-    console.warn(w3_2.scene.children);
-    // console.warn(w3_2.scene.children[15].position.set(0, 0, 0));
-  }
-})
+// window.addEventListener("keypress", function (e) {
+//   if (e.key === "1") {
+//     WEB3D.activate(w3_1);
+//     // w3_2.scene.fog = new THREE.FogExp2(0xff1234, 0.015);
+//   } else if (e.key === "2") {
+//     WEB3D.activate(w3_2);
+//   } else if (e.key === "d") {
+//     console.warn(WEB3D.active_object);
+//     // console.warn(w3_1.scene.children);
+//     // console.warn(w3_2.objects_to_remove);
+//     // console.warn(w3_2.scene.children[15].position.set(0, 0, 0));
+//   } else if (e.key === "r") {
+//     w3_2.reset();
+//   }
+// })

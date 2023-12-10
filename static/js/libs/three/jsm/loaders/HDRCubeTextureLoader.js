@@ -7,27 +7,27 @@ import {
 	LinearFilter,
 	LinearSRGBColorSpace,
 	Loader
-} from 'three';
+} from '../../build/three.module.js'; //'three';
 import { RGBELoader } from '../loaders/RGBELoader.js';
 
 class HDRCubeTextureLoader extends Loader {
 
-	constructor( manager ) {
+	constructor(manager) {
 
-		super( manager );
+		super(manager);
 
 		this.hdrLoader = new RGBELoader();
 		this.type = HalfFloatType;
 
 	}
 
-	load( urls, onLoad, onProgress, onError ) {
+	load(urls, onLoad, onProgress, onError) {
 
 		const texture = new CubeTexture();
 
 		texture.type = this.type;
 
-		switch ( texture.type ) {
+		switch (texture.type) {
 
 			case FloatType:
 
@@ -51,23 +51,23 @@ class HDRCubeTextureLoader extends Loader {
 
 		let loaded = 0;
 
-		function loadHDRData( i, onLoad, onProgress, onError ) {
+		function loadHDRData(i, onLoad, onProgress, onError) {
 
-			new FileLoader( scope.manager )
-				.setPath( scope.path )
-				.setResponseType( 'arraybuffer' )
-				.setWithCredentials( scope.withCredentials )
-				.load( urls[ i ], function ( buffer ) {
+			new FileLoader(scope.manager)
+				.setPath(scope.path)
+				.setResponseType('arraybuffer')
+				.setWithCredentials(scope.withCredentials)
+				.load(urls[i], function (buffer) {
 
-					loaded ++;
+					loaded++;
 
-					const texData = scope.hdrLoader.parse( buffer );
+					const texData = scope.hdrLoader.parse(buffer);
 
-					if ( ! texData ) return;
+					if (!texData) return;
 
-					if ( texData.data !== undefined ) {
+					if (texData.data !== undefined) {
 
-						const dataTexture = new DataTexture( texData.data, texData.width, texData.height );
+						const dataTexture = new DataTexture(texData.data, texData.width, texData.height);
 
 						dataTexture.type = texture.type;
 						dataTexture.colorSpace = texture.colorSpace;
@@ -76,24 +76,24 @@ class HDRCubeTextureLoader extends Loader {
 						dataTexture.magFilter = texture.magFilter;
 						dataTexture.generateMipmaps = texture.generateMipmaps;
 
-						texture.images[ i ] = dataTexture;
+						texture.images[i] = dataTexture;
 
 					}
 
-					if ( loaded === 6 ) {
+					if (loaded === 6) {
 
 						texture.needsUpdate = true;
-						if ( onLoad ) onLoad( texture );
+						if (onLoad) onLoad(texture);
 
 					}
 
-				}, onProgress, onError );
+				}, onProgress, onError);
 
 		}
 
-		for ( let i = 0; i < urls.length; i ++ ) {
+		for (let i = 0; i < urls.length; i++) {
 
-			loadHDRData( i, onLoad, onProgress, onError );
+			loadHDRData(i, onLoad, onProgress, onError);
 
 		}
 
@@ -101,10 +101,10 @@ class HDRCubeTextureLoader extends Loader {
 
 	}
 
-	setDataType( value ) {
+	setDataType(value) {
 
 		this.type = value;
-		this.hdrLoader.setDataType( value );
+		this.hdrLoader.setDataType(value);
 
 		return this;
 

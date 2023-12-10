@@ -9,27 +9,32 @@
 {% endblock %}
 
 {% block script %}
-<!-- origin -->
-<script src="{{url_for('static',filename='js/utils/modal.js')}}"></script>
-<script src="{{url_for('static',filename='js/origins/notice_load.js')}}"></script>
-<script src="{{url_for('static',filename='js/origins/script_load.js')}}"></script>
 
 <!-- 物理エンジンAmmo.js -->
-<!-- <script
-  src="https://rawcdn.githack.com/kripken/ammo.js/aab297a4164779c3a9d8dc8d9da26958de3cb778/builds/ammo.js"></script> -->
 <script src="{{url_for('static',filename='js/libs/three/jsm/libs/ammo.wasm.js')}}"></script>
-<!-- <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script> -->
-
 
 <!-- Physijis -->
 <!-- <script src="{{url_for('static',filename='js/libs/three/physijs/physi.js')}}"></script>
 <script src="{{url_for('static',filename='js/libs/three/physijs/physijs_worker.js')}}"></script> -->
 <!-- <script src="{{url_for('static',filename='js/libs/three/physijs/ammo.js')}}"></script> -->
 
-<script type="module" src="{{url_for('static',filename='js/origins/scene_load.js')}}"></script>
+<script type="module" src="{{url_for('static',filename='js/origins/web3d.js')}}"></script>
+<script type="module" src="{{url_for('static',filename='js/origins/web3d_game.js')}}"></script>
 
 
+{% if current_user.is_authenticated %}
 <script>
   console.warn("this is index.html");
+  const username = "{{current_user.username}}";
+  const user_id = "{{current_user.id}}";
 </script>
+{% endif %}
+
+{% if current_user.auth == 1 %}
+<script>
+  console.warn("debug mode");
+  let mode = "debug";
+</script>
+{% endif %}
+
 {% endblock %}
