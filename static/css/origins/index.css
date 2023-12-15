@@ -1,14 +1,19 @@
-#notice-title {
-  background-color: plum;
-  border-radius: 10px 10px 0% 0%;
-  padding-left: 10px;
-  padding-right: 10px;
+#info {
+  position: absolute;
+  top: 80vh;
+  width: 100%;
+  text-align: center;
+  z-index: 2;
+  display: block;
+  background-color: black;
+  color: greenyellow;
 }
 
-#notice-content {
-  background-color: palevioletred;
-  font-size: normal;
-  border-radius: 0% 0% 10px 10px;
-  padding-left: 10px;
-  padding-right: 10px;
+#explanation {
+  position: absolute;
+  top: 20vh;
+  width: 100%;
+  z-index: 1;
+  display: block;
+  color: blue;
 }

@@ -6,6 +6,10 @@ body {
   overflow: hidden;
 }
 
+nav {
+  z-index: 100;
+}
+
 #base-header {
   height: 10vh;
 }
@@ -19,7 +23,7 @@ body {
 }
 
 .modal-header {
-  background-color: black;
+  background-color: rgb(170, 100, 170);
   color: white;
 }
 
@@ -30,6 +34,21 @@ body {
 }
 
 .modal-footer {
-  background-color: black;
+  background-color: rgb(170, 100, 170);
   color: white;
+}
+
+#notice-title {
+  background-color: plum;
+  border-radius: 10px 10px 0% 0%;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+#notice-content {
+  background-color: palevioletred;
+  font-size: normal;
+  border-radius: 0% 0% 10px 10px;
+  padding-left: 10px;
+  padding-right: 10px;
 }
