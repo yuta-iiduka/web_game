@@ -97,6 +97,7 @@ class WEB3DGame extends WEB3DAmmo {
         if (e.key === "x") {
           self.check_collide();
         } else if (e.key === "z") {
+          console.log(self.camera.rotation.y);
           console.warn(self.scene.children);
         }
       }
@@ -106,7 +107,7 @@ class WEB3DGame extends WEB3DAmmo {
 
   init() {
     super.init();
-    this.send_player_info();
+    // this.send_player_info();
     this.ready = true;
   }
 
@@ -116,14 +117,15 @@ class WEB3DGame extends WEB3DAmmo {
     this.init_physics();
     this.create_objects();
     this.init_input();
-    this.set_background("static/img/textures/pisaHDR/", ['px.hdr', 'nx.hdr', 'py.hdr', 'ny.hdr', 'pz.hdr', 'nz.hdr']);
+    // this.set_background("static/img/textures/pisa/", ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']);
+    // this.set_background("static/img/textures/pisaHDR/", ['px.hdr', 'nx.hdr', 'py.hdr', 'ny.hdr', 'pz.hdr', 'nz.hdr']);
     // this.set_background("static/img/textures/pisaHDR/", ['okinawa1.hdr', 'okinawa1.hdr', 'okinawa1.hdr', 'okinawa2.hdr', 'okinawa3.hdr', 'okinawa4.hdr']);
     this.set_player();
     // this.set_cube();
     // this.set_imgs();
     // this.set_properties();
     this.set_objects();
-    this.set_menu();
+    // this.set_menu();
     this.draw();
   }
 
@@ -754,6 +756,9 @@ class WEB3DGame extends WEB3DAmmo {
           break;
         case "img":
           obj = this.set_img_plane(property["image"], property["position"]["x"], property["position"]["y"], property["position"]["z"], property["rotation"]["x"], property["rotation"]["y"], property["rotation"]["z"], property["size"]["w"], property["size"]["h"]);
+          break;
+        case "background":
+          obj = this.set_background(property["folder"], property["images"]);
           break;
         default:
           console.warn("set_object :", obj);

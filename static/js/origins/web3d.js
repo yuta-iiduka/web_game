@@ -7,6 +7,7 @@ import { FirstPersonControls } from "../libs/three/jsm/controls/FirstPersonContr
 
 //
 import { HDRCubeTextureLoader } from "../libs/three/jsm/loaders/HDRCubeTextureLoader.js";
+import { CubeTextureLoader } from "../libs/three/build/three.module.js";
 // import { FlakesTexture } from "../libs/three/jsm/textures/FlakesTexture.js";
 
 
@@ -54,7 +55,11 @@ export class WEB3D {
     //menu text
     this.menu_canvas = document.createElement("canvas");
     this.menu_canvas.id = "menu_canvas";
+    // this.menu_canvas.style.position = "fixed";
+    // this.menu_canvas.style.top = "0";
+    // this.menu_canvas.style.zIndex = "10001";
     this.menu_canvas.style.display = "none";
+
     this.view.appendChild(this.menu_canvas);
 
     //object mouse select event
@@ -187,10 +192,29 @@ export class WEB3D {
 
   //シーンの背景を設定する
   /** 
+    PNGファイルを背景に設定します。正方形256x256サイズ推奨
+    https://anyconv.com/ja/jpeg-to-hdr-konbata/#google_vignette
+  */
+  set_background(folder_path, file_name_list) {
+    const self = this;
+    new CubeTextureLoader()
+      .setPath(folder_path)
+      .load(
+        file_name_list,
+        function (texture) {
+          self.scene.background = texture;
+          self.scene.environment = texture;
+        }
+      );
+    return this;
+  }
+
+  //シーンの背景を設定する
+  /** 
     HDRファイルを背景に設定します。
     https://anyconv.com/ja/jpeg-to-hdr-konbata/#google_vignette
   */
-  set_background(folder_path, hdr_file_name_list) {
+  set_hdr_background(folder_path, hdr_file_name_list) {
     const self = this;
     new HDRCubeTextureLoader()
       .setPath(folder_path)
@@ -207,17 +231,26 @@ export class WEB3D {
   set_menu() {
     let self = this;
     let menuGeometry = new THREE.PlaneGeometry(WEB3D.view.innerWidth, WEB3D.view.innerHeight);
-    let menuMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, name: "menu", opacity: 0.5, transparent: true, alphaToCoverage: true })
+    let menuMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, name: "menu", opacity: 1.0, transparent: true, alphaToCoverage: true })
     let menu = new THREE.Mesh(menuGeometry, menuMaterial);
     WEB3D.set_canvas_menu("canvas menu");
     menuMaterial.map = new THREE.Texture(WEB3D.menu_canvas);
     menu.name = "menu";
+    // menu.rotation.x = Math.PI * 1.25;
     menu.update = function () {
+      const r = 1;
       menu.material.map.needsUpdate = true;
-      menu.rotation.x += 1;//Math.PI * 1.5;
-      menu.position.x = self.camera.position.x - 1;
-      menu.position.y = self.camera.position.y;
-      menu.position.z = self.camera.position.z - 1;
+      menu.rotation.x = self.camera.rotation.x //+ (0.05 * Math.PI);
+      menu.rotation.y = self.camera.rotation.y //+ (0.5 * Math.PI);
+      menu.rotation.z = self.camera.rotation.z //+ (0.5 * Math.PI);
+      // menu.position.x = self.camera.position.x + (r * Math.sin(self.camera.rotation.x));
+      // menu.position.y = self.camera.position.y;
+      // menu.position.z = self.camera.position.z + (r * Math.cos(self.camera.rotation.z));
+      if (self.camera.rotation.y < 1.5 || self.camera.rotation.y > -1.5) {
+        menu.position.x = self.camera.position.x - (r * Math.sin(self.camera.rotation.y));
+        menu.position.y = self.camera.position.y;
+        menu.position.z = self.camera.position.z - (r * Math.cos(self.camera.rotation.y));
+      }
     }
     let display = true;
     WEB3D.view.addEventListener("contextmenu", function () {
@@ -232,6 +265,8 @@ export class WEB3D {
     })
 
     this.scene.add(menu);
+
+    return menu;
   }
 
   set_plane(px = 15, py = 0, pz = 0, rx = 0, ry = 0, rz = 0, w = 60, h = 20, color = 0xffffff) {
